@@ -32,7 +32,11 @@ function getValidation(username) {
     };
   }
 
-  return { valid: true, message: '', trimmed };
+  return {
+    valid: true,
+    message: '',
+    trimmed,
+  };
 }
 
 function isValidRoomCode(code) {
@@ -52,23 +56,37 @@ function Home({
 }) {
   const [touched, setTouched] = useState(false);
   const [joinMode, setJoinMode] = useState(
-    () => initialJoinMode || Boolean(externalJoinError)
+    () => Boolean(externalJoinError)
   );
-  const [roomCode, setRoomCode] = useState(initialRoomCode);
-  const [roomTouched, setRoomTouched] = useState(false);
-  const [joinError, setJoinError] = useState(externalJoinError);
+  const [roomCode, setRoomCode] = useState(
+    initialRoomCode || ''
+  );
 
+  const [roomTouched, setRoomTouched] = useState(false);
+  const [joinError, setJoinError] = useState(
+    externalJoinError
+  );
+  // Shared room URL
+  const isSharedRoom = Boolean(
+    initialRoomCode && initialRoomCode.trim()
+  );
   useEffect(() => {
     if (externalJoinError) {
       setJoinError(externalJoinError);
-      setJoinMode(true);
+
+      // Only show the room-code panel for normal
+      // "Join Room" flow.
+      if (!isSharedRoom) {
+        setJoinMode(true);
+      }
     }
-  }, [externalJoinError]);
+  }, [externalJoinError, isSharedRoom]);
 
   useEffect(() => {
     if (initialRoomCode) {
-      setRoomCode(initialRoomCode);
-      setJoinMode(true);
+      setRoomCode(
+        initialRoomCode.trim().toUpperCase()
+      );
     }
   }, [initialRoomCode]);
 
@@ -76,38 +94,75 @@ function Home({
   const isValid = validation.valid;
   const showError = touched && !isValid;
 
-  const trimmedRoomCode = roomCode.trim().toUpperCase();
-  const roomCodeValid = isValidRoomCode(roomCode);
-  const showRoomError = roomTouched && joinMode && !roomCodeValid && roomCode.length > 0;
-  const displayJoinError = joinError || externalJoinError;
+  const trimmedRoomCode = roomCode
+    .trim()
+    .toUpperCase();
+
+  const roomCodeValid = isValidRoomCode(
+    roomCode
+  );
+
+  const showRoomError =
+    roomTouched &&
+    joinMode &&
+    !roomCodeValid &&
+    roomCode.length > 0;
+
+  const displayJoinError =
+    joinError || externalJoinError;
 
   const handleChange = (e) => {
-    const value = e.target.value.slice(0, MAX_LENGTH);
+    const value = e.target.value.slice(
+      0,
+      MAX_LENGTH
+    );
+
     onUsernameChange(value);
   };
 
   const persistUsername = () => {
     if (!isValid) return;
-    sessionStorage.setItem('chatUsername', validation.trimmed);
-    onUsernameChange(validation.trimmed);
+
+    sessionStorage.setItem(
+      'chatUsername',
+      validation.trimmed
+    );
+
+    onUsernameChange(
+      validation.trimmed
+    );
   };
 
   const handleBlur = () => {
     setTouched(true);
+
     if (isValid) {
       persistUsername();
     }
   };
 
+  // CREATE ROOM
   const handleCreateRoom = () => {
-    if (!isValid) return;
+    if (!isValid) {
+      setTouched(true);
+      return;
+    }
+
     persistUsername();
     setJoinError('');
-    onCreateRoom(validation.trimmed);
+
+    onCreateRoom(
+      validation.trimmed
+    );
   };
 
+  // Show normal Join Room flow
   const handleShowJoin = () => {
-    if (!isValid) return;
+    if (!isValid) {
+      setTouched(true);
+      return;
+    }
+
     persistUsername();
     setJoinError('');
     setJoinMode(true);
@@ -118,40 +173,117 @@ function Home({
       .replace(/[^A-Za-z0-9]/g, '')
       .slice(0, ROOM_CODE_LENGTH)
       .toUpperCase();
+
     setRoomCode(value);
     setJoinError('');
   };
 
+  // NORMAL JOIN USING ROOM CODE
   const handleJoinSubmit = () => {
     setRoomTouched(true);
 
-    if (!isValid) return;
+    if (!isValid) {
+      setTouched(true);
+      return;
+    }
 
     if (!roomCodeValid) {
-      setJoinError('Enter a valid 6-character room code.');
+      setJoinError(
+        'Enter a valid 6-character room code.'
+      );
       return;
     }
 
     persistUsername();
-    onJoinRoom(validation.trimmed, trimmedRoomCode);
+    setJoinError('');
+
+    onJoinRoom(
+      validation.trimmed,
+      trimmedRoomCode
+    );
   };
 
-  const handleUsernameKeyDown = (e) => {
-    if (e.key === 'Enter' && isValid) {
-      if (joinMode) return;
-      persistUsername();
-      handleCreateRoom();
+  // JOIN FROM SHARED ROOM LINK
+  const handleSharedRoomJoin = () => {
+    if (!isValid) {
+      setTouched(true);
+      return;
     }
+
+    const code = initialRoomCode
+      .trim()
+      .toUpperCase();
+
+    if (!isValidRoomCode(code)) {
+      setJoinError(
+        'This room link contains an invalid room code.'
+      );
+      return;
+    }
+
+    persistUsername();
+    setJoinError('');
+
+    // IMPORTANT:
+    // This is the ONLY action that joins
+    // the room from a shared URL.
+    onJoinRoom(
+      validation.trimmed,
+      code
+    );
   };
 
+  // Username Enter key
+  const handleUsernameKeyDown = (e) => {
+    if (e.key !== 'Enter') return;
+
+    /*
+     * VERY IMPORTANT:
+     *
+     * If this is a shared room URL,
+     * pressing Enter must NOT join/create anything.
+     *
+     * User must click "Join Room".
+     */
+    if (isSharedRoom) {
+      e.preventDefault();
+      return;
+    }
+
+    /*
+     * In normal Join Room mode,
+     * pressing Enter on username should
+     * not create a room.
+     */
+    if (joinMode) {
+      return;
+    }
+
+    if (!isValid) {
+      return;
+    }
+
+    e.preventDefault();
+
+    handleCreateRoom();
+  };
+
+  // Room-code Enter key
   const handleRoomCodeKeyDown = (e) => {
-    if (e.key === 'Enter' && isValid && roomCodeValid) {
+    if (
+      e.key === 'Enter' &&
+      isValid &&
+      roomCodeValid
+    ) {
+      e.preventDefault();
       handleJoinSubmit();
     }
   };
 
   return (
     <div className="home">
+
+      {/* Theme */}
       <button
         type="button"
         className="home-theme-btn"
@@ -162,38 +294,68 @@ function Home({
       </button>
 
       <div className="home-card">
-        <div className="home-icon" aria-hidden="true">♟</div>
 
+        {/* Icon */}
+        <div
+          className="home-icon"
+          aria-hidden="true"
+        >
+          ♟
+        </div>
+
+        {/* Title */}
         <h1 className="home-title">
-          {initialRoomCode ? `Welcome!` : 'REAL-TIME GAME CHAT'}
+          {isSharedRoom
+            ? 'Welcome!'
+            : 'REAL-TIME GAME CHAT'}
         </h1>
 
+        {/* Tagline */}
         <p className="home-tagline">
-          {initialRoomCode
-            ? `You've been invited to join room ${initialRoomCode}.`
-            : (
-              <>
-                Play together.<br />
-                Chat together.
-              </>
-            )}
+          {isSharedRoom ? (
+            <>
+              You've been invited to join room{' '}
+              <strong>
+                {initialRoomCode}
+              </strong>.
+            </>
+          ) : (
+            <>
+              Play together.
+              <br />
+              Chat together.
+            </>
+          )}
         </p>
 
+        {/* Description */}
         <p className="home-description">
-          {initialRoomCode
+          {isSharedRoom
             ? 'Enter your username below to join the room.'
             : 'Create a room or join your friends and chat in real time.'}
         </p>
 
         <div className="home-form">
-          <label className="home-label" htmlFor="username">
-            Username <span className="home-required">*</span>
+
+          {/* Username */}
+          <label
+            className="home-label"
+            htmlFor="username"
+          >
+            Username{' '}
+            <span className="home-required">
+              *
+            </span>
           </label>
 
           <input
             id="username"
             type="text"
-            className={`home-input${showError ? ' home-input--invalid' : ''}`}
+            className={`home-input${
+              showError
+                ? ' home-input--invalid'
+                : ''
+            }`}
             placeholder="Enter your username"
             value={username}
             maxLength={MAX_LENGTH}
@@ -206,89 +368,180 @@ function Home({
           />
 
           <div className="home-input-meta">
-            <span className={`home-hint${showError ? ' home-hint--error' : ''}`}>
-              {showError ? validation.message : '2–20 characters'}
+
+            <span
+              className={`home-hint${
+                showError
+                  ? ' home-hint--error'
+                  : ''
+              }`}
+            >
+              {showError
+                ? validation.message
+                : '2–20 characters'}
             </span>
-            <span className="home-count">{username.length}/{MAX_LENGTH}</span>
+
+            <span className="home-count">
+              {username.length}/{MAX_LENGTH}
+            </span>
+
           </div>
 
-          {!joinMode ? (
-            <>
-              <button
-                type="button"
-                className="home-action-btn"
-                disabled={!isValid}
-                onClick={handleCreateRoom}
-              >
-                Create Room
-              </button>
+          {/* ================================================= */}
+          {/* SHARED ROOM URL                                  */}
+          {/* ================================================= */}
 
-              <button
-                type="button"
-                className="home-action-btn home-action-btn--secondary"
-                disabled={!isValid}
-                onClick={handleShowJoin}
-              >
-                Join Room
-              </button>
-            </>
+          {isSharedRoom ? (
+
+            <button
+              type="button"
+              className="home-action-btn"
+              disabled={!isValid}
+              onClick={handleSharedRoomJoin}
+            >
+              Join Room
+            </button>
+
           ) : (
-            <div className="home-join-panel">
-              <label className="home-label" htmlFor="roomCode">
-                Room Code <span className="home-required">*</span>
-              </label>
 
-              <input
-                id="roomCode"
-                type="text"
-                className={`home-input home-input--code${showRoomError || displayJoinError ? ' home-input--invalid' : ''}`}
-                placeholder="Enter 6-digit code"
-                value={roomCode}
-                maxLength={ROOM_CODE_LENGTH}
-                onChange={handleRoomCodeChange}
-                onBlur={() => setRoomTouched(true)}
-                onKeyDown={handleRoomCodeKeyDown}
-                autoComplete="off"
-                autoCapitalize="characters"
-                spellCheck="false"
-              />
+            /* ================================================= */
+            /* NORMAL HOME PAGE                                 */
+            /* ================================================= */
 
-              <div className="home-input-meta">
-                <span className={`home-hint${showRoomError || displayJoinError ? ' home-hint--error' : ''}`}>
-                  {displayJoinError || (showRoomError ? 'Room code must be 6 characters.' : '6-character code')}
-                </span>
-                <span className="home-count">{roomCode.length}/{ROOM_CODE_LENGTH}</span>
+            !joinMode ? (
+              <>
+                <button
+                  type="button"
+                  className="home-action-btn"
+                  disabled={!isValid}
+                  onClick={handleCreateRoom}
+                >
+                  Create Room
+                </button>
+
+                <button
+                  type="button"
+                  className="home-action-btn home-action-btn--secondary"
+                  disabled={!isValid}
+                  onClick={handleShowJoin}
+                >
+                  Join Room
+                </button>
+              </>
+            ) : (
+
+              /* ================================================= */
+              /* NORMAL JOIN BY ROOM CODE                          */
+              /* ================================================= */
+
+              <div className="home-join-panel">
+
+                <label
+                  className="home-label"
+                  htmlFor="roomCode"
+                >
+                  Room Code{' '}
+                  <span className="home-required">
+                    *
+                  </span>
+                </label>
+
+                <input
+                  id="roomCode"
+                  type="text"
+                  className={`home-input home-input--code${
+                    showRoomError ||
+                    displayJoinError
+                      ? ' home-input--invalid'
+                      : ''
+                  }`}
+                  placeholder="Enter 6-digit code"
+                  value={roomCode}
+                  maxLength={ROOM_CODE_LENGTH}
+                  onChange={handleRoomCodeChange}
+                  onBlur={() =>
+                    setRoomTouched(true)
+                  }
+                  onKeyDown={
+                    handleRoomCodeKeyDown
+                  }
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck="false"
+                />
+
+                <div className="home-input-meta">
+
+                  <span
+                    className={`home-hint${
+                      showRoomError ||
+                      displayJoinError
+                        ? ' home-hint--error'
+                        : ''
+                    }`}
+                  >
+                    {displayJoinError ||
+                      (showRoomError
+                        ? 'Room code must be 6 characters.'
+                        : '6-character code')}
+                  </span>
+
+                  <span className="home-count">
+                    {roomCode.length}/
+                    {ROOM_CODE_LENGTH}
+                  </span>
+
+                </div>
+
+                <button
+                  type="button"
+                  className="home-action-btn"
+                  disabled={
+                    !isValid ||
+                    !roomCodeValid
+                  }
+                  onClick={
+                    handleJoinSubmit
+                  }
+                >
+                  Join
+                </button>
+
+                <button
+                  type="button"
+                  className="home-action-btn home-action-btn--secondary"
+                  onClick={() => {
+                    setJoinMode(false);
+                    setRoomCode('');
+                    setRoomTouched(false);
+                    setJoinError('');
+                  }}
+                >
+                  Back
+                </button>
+
               </div>
-
-              <button
-                type="button"
-                className="home-action-btn"
-                disabled={!isValid || !roomCodeValid}
-                onClick={handleJoinSubmit}
-              >
-                Join
-              </button>
-
-              <button
-                type="button"
-                className="home-action-btn home-action-btn--secondary"
-                onClick={() => {
-                  setJoinMode(false);
-                  setRoomCode('');
-                  setRoomTouched(false);
-                  setJoinError('');
-                }}
-              >
-                Back
-              </button>
-            </div>
+            )
           )}
+
+          {/* Error for shared-room join */}
+          {isSharedRoom &&
+            displayJoinError && (
+              <p
+                className="home-hint home-hint--error"
+                role="alert"
+              >
+                {displayJoinError}
+              </p>
+            )}
+
         </div>
 
         <ul className="home-features">
           <li>Real-time communication</li>
           <li>Secure rooms</li>
         </ul>
+
       </div>
     </div>
   );
