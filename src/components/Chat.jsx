@@ -427,19 +427,22 @@ function Chat({
           >
             😊
           </button>
-          <input
-            type="text"
+          <textarea
             className="chat-message-input"
-            placeholder={chatEnabled ? 'Type a message...' : 'Connecting to room...'}
+            placeholder={
+              chatEnabled ? 'Type a message...' : 'Connecting to room...'
+            }
             value={message}
             disabled={!chatEnabled}
             onChange={handleTyping}
             onBlur={handleInputBlur}
+            rows={1}
             enterKeyHint="send"
             autoComplete="off"
             autoCorrect="off"
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
                 sendMessage();
               }
             }}
