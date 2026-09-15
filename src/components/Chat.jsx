@@ -406,21 +406,27 @@ function Chat({
 
         {showEmoji && (
           <div className="emoji-picker" ref={emojiPickerRef}>
-            <EmojiPicker onEmojiClick={onEmojiClick} skinTonesDisabled />
+            <EmojiPicker
+              onEmojiClick={onEmojiClick}
+              skinTonesDisabled
+              autoFocusSearch={false}
+            />
           </div>
         )}
 
         <div className="chat-input">
           <button
-            className="emoji-btn"
             type="button"
-            disabled={!chatEnabled}
-            onClick={() => setShowEmoji((prev) => !prev)}
+            className="emoji-btn"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowEmoji((prev) => !prev);
+            }}
             aria-label="Open emoji picker"
           >
             😊
           </button>
-
           <input
             type="text"
             className="chat-message-input"

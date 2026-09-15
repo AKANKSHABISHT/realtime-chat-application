@@ -165,7 +165,7 @@ function Home({
         <div className="home-icon" aria-hidden="true">♟</div>
 
         <h1 className="home-title">
-          {initialRoomCode ? `Welcome!` : 'REAL-TIME GAMING'}
+          {initialRoomCode ? `Welcome!` : 'REAL-TIME GAME CHAT'}
         </h1>
 
         <p className="home-tagline">

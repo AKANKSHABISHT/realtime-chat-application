@@ -482,9 +482,6 @@
 
   .emoji-picker {
     bottom: calc(70px + env(safe-area-inset-bottom, 0px));
-    left: 8px;
-    right: 8px;
-    max-width: calc(100vw - 16px);
   }
 }
 
